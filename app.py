@@ -1,5 +1,5 @@
 import asyncio
-import aiohttp
+import aiohttp,json
 from fastapi import FastAPI, HTTPException
 import subprocess
 import shutil
@@ -20,7 +20,7 @@ if __name__ == "__main__":
         cloud_mode = sys.argv[1].lower() == "true"
 
 LOCAL_PORT = int(os.getenv("PORT", 8000))
-CLOUDFLARE_ENV_FILE = "cloudflare.env"
+CLOUDFLARE_ENV_FILE = "keys_data.json"
 
 # =====================================================
 # FASTAPI APP
@@ -131,10 +131,16 @@ def run_cloudflare_tunnel(port: int):
             if match:
                 public_url = match.group(0)
                 print(f"\n✅ Public URL: {public_url}\n")
-
-                with open(CLOUDFLARE_ENV_FILE, "w") as f:
-                    f.write(f"CLOUDFLARE_PUBLIC_URL={public_url}\n")
+                obj = {
+                    "public_name":public_url
+                }
+                with open(CLOUDFLARE_ENV_FILE, "w",encoding='utf-8') as f:
+                    json.dump(obj,f,indent=4)
                 break
+            else:
+                print("No match found")
+        else:
+            print("No cloud fare in Line")
 
 
 # =====================================================
