@@ -1,5 +1,5 @@
 import asyncio
-import aiohttp,json
+import aiohttp, json
 from fastapi import FastAPI, HTTPException
 import subprocess
 import shutil
@@ -41,7 +41,7 @@ MAX_RETRIES = 3
 
 
 # =====================================================
-# 🔐 SAFE ASYNC GROWW LIVE FETCH
+# 🔐 SAFE ASYNC GROWW LIVE FETCH (UNCHANGED)
 # =====================================================
 async def fetch_day_high_low_async(option_id: str, session: aiohttp.ClientSession):
     if not option_id:
@@ -80,7 +80,7 @@ async def fetch_day_high_low_async(option_id: str, session: aiohttp.ClientSessio
 
 
 # =====================================================
-# 🌐 API ROUTE
+# 🌐 API ROUTE (UNCHANGED)
 # =====================================================
 @app.get("/option/live/{option_id}")
 async def get_option_live(option_id: str):
@@ -95,7 +95,7 @@ async def get_option_live(option_id: str):
 
 
 # =====================================================
-# ❤️ HEALTH CHECK
+# ❤️ HEALTH CHECK (UNCHANGED)
 # =====================================================
 @app.get("/")
 def health():
@@ -117,34 +117,35 @@ def install_cloudflared():
     subprocess.run(["chmod", "+x", "cloudflared"], check=True)
 
 
+# =====================================================
+# ☁️ CLOUDFLARE TUNNEL (FIXED PARSING ONLY)
+# =====================================================
 def run_cloudflare_tunnel(port: int):
     proc = subprocess.Popen(
         ["./cloudflared", "tunnel", "--url", f"http://localhost:{port}"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True
+        text=True,
+        bufsize=1
     )
 
+    url_pattern = re.compile(r"https://[^\s]+")
+
     for line in proc.stdout:
-        if "trycloudflare.com" in line:
-            match = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
-            if match:
-                public_url = match.group(0)
+        line = line.strip()
+        match = url_pattern.search(line)
+        if match:
+            public_url = match.group(0)
+
+            if "cloudflare" in public_url:
                 print(f"\n✅ Public URL: {public_url}\n")
-                obj = {
-                    "public_name":public_url
-                }
-                with open(CLOUDFLARE_ENV_FILE, "w",encoding='utf-8') as f:
-                    json.dump(obj,f,indent=4)
+                with open(CLOUDFLARE_ENV_FILE, "w", encoding="utf-8") as f:
+                    json.dump({"public_name": public_url}, f, indent=4)
                 break
-            else:
-                print("No match found")
-        else:
-            print("No cloud fare in Line")
 
 
 # =====================================================
-# 🚀 STARTERS
+# 🚀 STARTERS (UNCHANGED)
 # =====================================================
 def start_api():
     uvicorn.run(app, host="0.0.0.0", port=LOCAL_PORT, log_level="error")
@@ -156,17 +157,13 @@ if __name__ == "__main__":
 
         install_cloudflared()
 
-        # 🔹 Start API in background
         threading.Thread(target=start_api, daemon=True).start()
-
-        # 🔹 Start Cloudflare tunnel in background
         threading.Thread(
             target=run_cloudflare_tunnel,
             args=(LOCAL_PORT,),
             daemon=True
         ).start()
 
-        # ✅ Do NOT block the cell
         time.sleep(2)
         print("🚀 API + Cloudflare running in background")
         print("💡 Cell execution finished (Colab-safe)")
