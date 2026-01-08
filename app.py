@@ -12,7 +12,7 @@ import time
 # =====================================================
 # 🔧 CONFIG FLAG
 # =====================================================
-cloud_mode = False   # ✅ SET TRUE FOR COLAB
+cloud_mode = True   # ✅ SET TRUE FOR COLAB
 
 LOCAL_PORT = int(os.getenv("PORT", 8000))
 CLOUDFLARE_ENV_FILE = "cloudflare.env"
