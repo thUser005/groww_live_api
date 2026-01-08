@@ -8,11 +8,16 @@ import os
 import threading
 import uvicorn
 import time
+import sys
 
 # =====================================================
-# 🔧 CONFIG FLAG
+# 🔧 CONFIG FLAG (CLI BASED)
 # =====================================================
-cloud_mode = True   # ✅ SET TRUE FOR COLAB
+cloud_mode = False  # default
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        cloud_mode = sys.argv[1].lower() == "true"
 
 LOCAL_PORT = int(os.getenv("PORT", 8000))
 CLOUDFLARE_ENV_FILE = "cloudflare.env"
@@ -141,23 +146,25 @@ def start_api():
 
 if __name__ == "__main__":
     if cloud_mode:
+        print("☁️ Cloud mode ENABLED (Colab / Tunnel)")
+
         install_cloudflared()
 
-        # 🔹 Start API (background)
+        # 🔹 Start API in background
         threading.Thread(target=start_api, daemon=True).start()
 
-        # 🔹 Start Cloudflare tunnel (background)
+        # 🔹 Start Cloudflare tunnel in background
         threading.Thread(
             target=run_cloudflare_tunnel,
             args=(LOCAL_PORT,),
             daemon=True
         ).start()
 
-        # ✅ IMPORTANT: Do NOT block cell
+        # ✅ Do NOT block the cell
         time.sleep(2)
         print("🚀 API + Cloudflare running in background")
         print("💡 Cell execution finished (Colab-safe)")
 
     else:
-        # Railway / VS Code
+        print("🖥️ Normal mode (Railway / VS Code)")
         start_api()
