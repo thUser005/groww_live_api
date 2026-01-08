@@ -1,13 +1,15 @@
 import asyncio
 import aiohttp
 from fastapi import FastAPI, HTTPException
-from typing import Optional
 
 app = FastAPI(
     title="Groww Options Live API",
     version="1.0.0"
 )
 
+# =====================================================
+# CONFIG
+# =====================================================
 HEADERS = {
     "accept": "application/json, text/plain, */*",
     "x-app-id": "growwWeb",
@@ -17,16 +19,15 @@ HEADERS = {
 TIMEOUT = aiohttp.ClientTimeout(total=8)
 MAX_RETRIES = 3
 
-
 # =====================================================
-# 🔐 SAFE ASYNC GROWW LIVE FETCH
+# 🔐 SAFE ASYNC GROWW LIVE FETCH (UNCHANGED LOGIC)
 # =====================================================
 async def fetch_day_high_low_async(
     option_id: str,
     session: aiohttp.ClientSession
 ):
     if not option_id:
-        return None, None, None, None, False
+        return None
 
     option_id = option_id.upper()
 
@@ -54,7 +55,7 @@ async def fetch_day_high_low_async(
     # -----------------------------
     for attempt in range(MAX_RETRIES):
         try:
-            async with session.get(url, timeout=TIMEOUT) as resp:
+            async with session.get(url) as resp:
                 if resp.status != 200:
                     raise aiohttp.ClientResponseError(
                         resp.request_info,
@@ -63,7 +64,6 @@ async def fetch_day_high_low_async(
                     )
 
                 obj_data = await resp.json()
-
                 return obj_data if obj_data else None
 
         except (
@@ -72,32 +72,54 @@ async def fetch_day_high_low_async(
             ValueError
         ):
             if attempt < MAX_RETRIES - 1:
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
 
     return None
 
 
 # =====================================================
-# 🌐 API ROUTE
+# 🔁 GLOBAL SESSION (IMPORTANT FOR 600 CALLS)
+# =====================================================
+@app.on_event("startup")
+async def startup_event():
+    connector = aiohttp.TCPConnector(
+        limit=200,              # max concurrent connections
+        limit_per_host=200,
+        ttl_dns_cache=300
+    )
+
+    app.state.session = aiohttp.ClientSession(
+        headers=HEADERS,
+        timeout=TIMEOUT,
+        connector=connector
+    )
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await app.state.session.close()
+
+
+# =====================================================
+# 🌐 API ROUTE (THREAD-SAFE & FAST)
 # =====================================================
 @app.get("/option/live/{option_id}")
 async def get_option_live(option_id: str):
-    async with aiohttp.ClientSession(headers=HEADERS) as session:
-        obj_data= await fetch_day_high_low_async(
-            option_id,
-            session
+    session = app.state.session
+
+    obj_data = await fetch_day_high_low_async(
+        option_id,
+        session
+    )
+
+    if obj_data is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to fetch live data"
         )
 
-        if obj_data is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Failed to fetch live data"
-            )
-        obj_data['option_id'] = option_id.upper()
-        
-        return obj_data
-            
-            
+    obj_data["option_id"] = option_id.upper()
+    return obj_data
 
 
 # =====================================================
