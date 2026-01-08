@@ -118,30 +118,31 @@ def install_cloudflared():
 
 
 # =====================================================
-# ☁️ CLOUDFLARE TUNNEL (FIXED PARSING ONLY)
+# ☁️ CLOUDFLARE TUNNEL (REFERENCE VERSION – WORKING)
 # =====================================================
-def run_cloudflare_tunnel(port: int):
+def start_cloudflare_tunnel(port):
     proc = subprocess.Popen(
-        ["./cloudflared", "tunnel", "--url", f"http://localhost:{port}"],
+        ["./cloudflared", "tunnel", "--url", f"http://127.0.0.1:{port}"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1
     )
 
-    url_pattern = re.compile(r"https://[^\s]+")
+    public_url = None
+    for line in iter(proc.stdout.readline, ""):
+        print("[Cloudflare]", line.strip())
+        if "trycloudflare.com" in line:
+            match = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
+            if match:
+                public_url = match.group(0)
+                print("🌍 Public URL:", public_url)
 
-    for line in proc.stdout:
-        line = line.strip()
-        match = url_pattern.search(line)
-        if match:
-            public_url = match.group(0)
-
-            if "cloudflare" in public_url:
-                print(f"\n✅ Public URL: {public_url}\n")
                 with open(CLOUDFLARE_ENV_FILE, "w", encoding="utf-8") as f:
                     json.dump({"public_name": public_url}, f, indent=4)
                 break
+
+    return proc, public_url
 
 
 # =====================================================
@@ -157,16 +158,14 @@ if __name__ == "__main__":
 
         install_cloudflared()
 
+        # 🔹 Start API in background
         threading.Thread(target=start_api, daemon=True).start()
-        threading.Thread(
-            target=run_cloudflare_tunnel,
-            args=(LOCAL_PORT,),
-            daemon=True
-        ).start()
 
-        time.sleep(2)
-        print("🚀 API + Cloudflare running in background")
-        print("💡 Cell execution finished (Colab-safe)")
+        # 🔹 Start tunnel (blocking UNTIL URL appears)
+        _, public_url = start_cloudflare_tunnel(LOCAL_PORT)
+
+        print("🚀 API + Cloudflare running")
+        print("💡 Public URL saved to keys_data.json")
 
     else:
         print("🖥️ Normal mode (Railway / VS Code)")
